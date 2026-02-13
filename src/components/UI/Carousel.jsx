@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const slides = [
   "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
@@ -9,6 +9,9 @@ const slides = [
 export default function Carousel() {
   const [current, setCurrent] = useState(1);
   const [transition, setTransition] = useState(true);
+  const intervalRef = useRef(null);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
 
   const extendedSlides = [
     slides[slides.length - 1],
@@ -16,20 +19,58 @@ export default function Carousel() {
     slides[0],
   ];
 
-  // Auto slide
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrent((prev) => prev + 1);
-    }, 4000);
+  // =========================
+  // Auto Slide Controls
+  // =========================
 
-    return () => clearInterval(interval);
+  const startAutoSlide = () => {
+    stopAutoSlide();
+    intervalRef.current = setInterval(() => {
+      setCurrent((prev) => prev + 1);
+    }, 1000);
+  };
+
+  const stopAutoSlide = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+  };
+
+  // =========================
+  // Browser Tab Visibility Fix
+  // =========================
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopAutoSlide();
+      } else {
+        startAutoSlide();
+      }
+    };
+
+    startAutoSlide();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopAutoSlide();
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
   }, []);
+
+  // =========================
+  // Infinite Loop Fix
+  // =========================
 
   const handleTransitionEnd = () => {
     if (current === extendedSlides.length - 1) {
       setTransition(false);
       setCurrent(1);
     }
+
     if (current === 0) {
       setTransition(false);
       setCurrent(extendedSlides.length - 2);
@@ -38,12 +79,44 @@ export default function Carousel() {
 
   useEffect(() => {
     if (!transition) {
-      requestAnimationFrame(() => setTransition(true));
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTransition(true);
+        });
+      });
     }
   }, [transition]);
 
+  // =========================
+  // Navigation
+  // =========================
+
   const nextSlide = () => setCurrent((prev) => prev + 1);
   const prevSlide = () => setCurrent((prev) => prev - 1);
+
+  // =========================
+  // Swipe Support (Mobile)
+  // =========================
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const distance = touchStartX.current - touchEndX.current;
+
+    if (distance > 50) {
+      nextSlide(); // Swipe left
+    }
+
+    if (distance < -50) {
+      prevSlide(); // Swipe right
+    }
+  };
 
   // Real index for pagination
   const realIndex =
@@ -54,8 +127,14 @@ export default function Carousel() {
       : current - 1;
 
   return (
-    <div className="relative w-full h-[400px] overflow-hidden">
-
+    <div
+      className="relative w-full h-[400px] overflow-hidden"
+      onMouseEnter={stopAutoSlide}
+      onMouseLeave={startAutoSlide}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Slides */}
       <div
         onTransitionEnd={handleTransitionEnd}
@@ -75,7 +154,7 @@ export default function Carousel() {
         ))}
       </div>
 
-      {/* Bigger Arrows with Background */}
+      {/* Left Arrow */}
       <button
         onClick={prevSlide}
         className="absolute left-6 top-1/2 -translate-y-1/2 
@@ -86,6 +165,7 @@ export default function Carousel() {
         ‹
       </button>
 
+      {/* Right Arrow */}
       <button
         onClick={nextSlide}
         className="absolute right-6 top-1/2 -translate-y-1/2 
@@ -107,7 +187,7 @@ export default function Carousel() {
                 ? "bg-orange-400"
                 : "bg-white/40"
             }`}
-          ></div>
+          />
         ))}
       </div>
     </div>
